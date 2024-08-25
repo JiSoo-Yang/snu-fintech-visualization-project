@@ -9,7 +9,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 # 한글 폰트 설정
-rc('font', family='AppleGothic')
+rc('font', family='NanumGothic')
 plt.rcParams['axes.unicode_minus'] = False
 
 # ----------------------------
@@ -52,8 +52,9 @@ m.save(map_path)
 # Streamlit 앱 구성
 # ----------------------------
 
-# Streamlit 앱 설정
-st.title('초보운전, 운전하기 좋은 날은 언제일까?')
+# 웹 폰트 설정
+
+st.title('초보운전, 언제가 가장 안전할까?')
 st.markdown('### <span style="color:#4169e1">Q1. 전국에서 교통사고가 많이 발생하는 지역은 어디일까?</span>', unsafe_allow_html=True)
 st.markdown('#### 1. 전국 교통사고 다발 지역 시각화 (2012-2021)')
 
@@ -130,6 +131,13 @@ styled_table_sido = df_sorted_sido[['사고지역위치명', '사고건수']].he
 st.table(styled_table_sido)
 
 # ----------------------------
+# 여러 연도의 데이터를 결합하여 요일, 시간대별 교통사고 추이 분석
+# ----------------------------
+
+# 사고 추이 분석 - 요일, 시간대
+st.markdown('### <span style="color:#4169e1">Q2. 특정 기간의 교통사고 추이는 어떻게 변화했을까?</span>', unsafe_allow_html=True)
+
+# ----------------------------
 # 여러 연도의 데이터를 결합하여 특정 기간의 교통사고 추이 분석
 # ----------------------------
 
@@ -169,8 +177,11 @@ df_children_day = df2_combined[(df2_combined['발생월'] == 5) & (df2_combined[
 children_day_stats = df_children_day.groupby('발생년도').sum()[['사고건수', '사망자수', '중상자수', '경상자수']].reset_index()
 
 # 사고 추이 분석 - 어린이날
-st.markdown('#### <span style="color:#4169e1">Q2. 특정 기간의 교통사고 추이는 어떻게 변화했을까?</span>', unsafe_allow_html=True)
-st.markdown('##### 가설1. 고령화와 저출산의 영향으로 어린이 인구가 감소하면서, 어린이날의 교통사고 발생 건수도 감소할 것이다.')
+st.markdown('### <span style="color:#4169e1">Q3. 특정 기간의 교통사고 추이는 어떻게 변화했을까?</span>', unsafe_allow_html=True)
+
+# 가설1 텍스트에 빨간색 밑줄 추가
+st.markdown('##### [가설1] 고령화와 저출산의 영향으로 어린이 인구가 감소하면서, <span style="text-decoration: underline; text-decoration-color: red; text-underline-offset: 0.2em; text-decoration-thickness: 2px;">어린이날의 교통사고 발생 건수도 감소할 것이다.</span>', 
+            unsafe_allow_html=True)
 
 # Plotly 그래프 생성
 fig = px.line(children_day_stats, x='발생년도', y=['사고건수', '사망자수', '중상자수', '경상자수'],
@@ -188,7 +199,9 @@ st.plotly_chart(fig)
 # 명절 기간 교통사고 추이 분석
 # ----------------------------
 
-st.markdown('##### 가설2. 비대면 명절 문화의 확산 등 사회적 변화로 인해 명절 기간 동안의 유동인구가 감소하면서 교통사고 발생 건수도 줄어들 것이다.')
+# 가설2 텍스트에 빨간색 밑줄 추가
+st.markdown('##### [가설2] 비대면 명절 문화의 확산 등 사회적 변화로 인해 <span style="text-decoration: underline; text-decoration-color: red; text-underline-offset: 0.2em; text-decoration-thickness: 2px;">명절 기간 동안의 유동인구가 감소하면서 교통사고 발생 건수도 줄어들 것이다.</span>', 
+            unsafe_allow_html=True)
 
 # 연도별 설날 연휴 날짜 딕셔너리
 lunar_new_year_dates = {
