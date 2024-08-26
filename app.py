@@ -131,11 +131,55 @@ styled_table_sido = df_sorted_sido[['사고지역위치명', '사고건수']].he
 st.table(styled_table_sido)
 
 # ----------------------------
-# 여러 연도의 데이터를 결합하여 요일, 시간대별 교통사고 추이 분석
+# 요일, 시간대별 교통사고 추이 분석
 # ----------------------------
 
-# 사고 추이 분석 - 요일, 시간대
-st.markdown('### <span style="color:#4169e1">Q2. 특정 기간의 교통사고 추이는 어떻게 변화했을까?</span>', unsafe_allow_html=True)
+st.markdown('### <span style="color:#4169e1">Q2. 운전하기에 적절한 요일, 시간대는 언제일까?</span>', unsafe_allow_html=True)
+
+# # 두 개의 엑셀 파일을 읽어옵니다
+# df1 = pd.read_excel('교통사고 데이터/요일별시간대별_사고건수(2014-2018).xls', header=2, index_col=0)
+# df2 = pd.read_excel('교통사고 데이터/요일별시간대별_사고건수(2019-2023).xls', header=2, index_col=0)
+
+# # 두 데이터프레임을 병합합니다
+# df_combined = pd.concat([df1, df2], axis=1)
+
+# # '합계' 열을 기준으로 데이터를 전처리합니다
+# df_accidents = df_combined.loc['합계', :].T.reset_index()
+# df_accidents.columns = ['시간대', '사고건수']
+
+# # 다중 인덱스 문제 해결
+# df_accidents = df_accidents.drop(columns='index', errors='ignore')
+
+# # 시간대를 순서대로 정렬
+# df_accidents['시간대'] = pd.Categorical(df_accidents['시간대'], categories=[
+#     '00시-02시', '02시-04시', '04시-06시', '06시-08시', '08시-10시', '10시-12시', 
+#     '12시-14시', '14시-16시', '16시-18시', '18시-20시', '20시-22시', '22시-24시'], ordered=True)
+# df_accidents = df_accidents.sort_values('시간대')
+
+# # 요일별 사고건수 합계
+# df_days = df_combined.loc[df_combined.index.get_level_values(1) == '사고[건]'].reset_index(level=1, drop=True)
+
+# # 요일별 시간대별 사고건수 히트맵
+# fig_heatmap = px.imshow(df_days.values,
+#                         labels=dict(x="시간대", y="요일", color="사고건수"),
+#                         x=df_days.columns, y=df_days.index,
+#                         color_continuous_scale='Reds')
+
+# st.markdown('### <span style="color:#4169e1">Q2. 요일 및 시간대별 교통사고 현황</span>', unsafe_allow_html=True)
+
+# # Plotly 그래프 생성 - 시간대별 사고건수
+# fig_bar = px.bar(df_accidents, x='시간대', y='사고건수', title='시간대별 교통사고 건수',
+#                  labels={'사고건수': '사고 건수', '시간대': '시간대'})
+
+# # Plotly 그래프 생성 - 요일별 사고건수
+# fig_day_bar = px.bar(df_days.sum(axis=1).reset_index(), x='사고요일', y=0, title='요일별 교통사고 건수',
+#                      labels={0: '사고 건수', '사고요일': '요일'})
+
+# # Streamlit에서 Plotly 그래프 표시
+# st.plotly_chart(fig_heatmap)
+# st.plotly_chart(fig_bar)
+# st.plotly_chart(fig_day_bar)
+
 
 # ----------------------------
 # 여러 연도의 데이터를 결합하여 특정 기간의 교통사고 추이 분석
@@ -154,24 +198,24 @@ file_paths = [
 ]
 
 # 데이터를 저장할 빈 리스트를 만듭니다.
-df2_list = []
+df3_list = []
 
 # 각 파일을 불러와서 리스트에 추가합니다.
 for file_path in file_paths:
     year = int(file_path[-9:-5])  # 파일명에서 연도 추출
-    df2 = pd.read_csv(file_path, encoding='euc-kr')
-    df2['발생년도'] = year  # 발생년도 열 추가
-    df2_list.append(df2)
+    df3 = pd.read_csv(file_path, encoding='euc-kr')
+    df3['발생년도'] = year  # 발생년도 열 추가
+    df3_list.append(df3)
 
 # 모든 데이터를 하나의 데이터프레임으로 결합합니다.
-df2_combined = pd.concat(df2_list, ignore_index=True)
+df3_combined = pd.concat(df3_list, ignore_index=True)
 
 # ----------------------------
 # 어린이날 교통사고 추이 분석
 # ----------------------------
 
 # 어린이날 (5월 5일) 데이터 필터링
-df_children_day = df2_combined[(df2_combined['발생월'] == 5) & (df2_combined['발생일'] == 5)]
+df_children_day = df3_combined[(df3_combined['발생월'] == 5) & (df3_combined['발생일'] == 5)]
 
 # 연도별 사고 건수 및 사망자수, 중상자수, 경상자수 집계
 children_day_stats = df_children_day.groupby('발생년도').sum()[['사고건수', '사망자수', '중상자수', '경상자수']].reset_index()
@@ -241,12 +285,12 @@ def filter_holiday_data(df, holiday_dates):
     return pd.concat(holiday_data_list, ignore_index=True)
 
 # 설날 교통사고 데이터 필터링 및 집계
-df_lunar_new_year = filter_holiday_data(df2_combined, lunar_new_year_dates)
+df_lunar_new_year = filter_holiday_data(df3_combined, lunar_new_year_dates)
 lunar_new_year_stats = df_lunar_new_year.groupby('발생년도').sum()[['사고건수', '사망자수', '중상자수', '경상자수']].reset_index()
 years_with_dates_lunar = [f"{year}\n({lunar_new_year_dates[year][0][0]}~{lunar_new_year_dates[year][-1][-1]})" for year in lunar_new_year_stats['발생년도']]
 
 # 추석 교통사고 데이터 필터링 및 집계
-df_chuseok = filter_holiday_data(df2_combined, chuseok_dates)
+df_chuseok = filter_holiday_data(df3_combined, chuseok_dates)
 chuseok_stats = df_chuseok.groupby('발생년도').sum()[['사고건수', '사망자수', '중상자수', '경상자수']].reset_index()
 years_with_dates_chuseok = [f"{year}\n({chuseok_dates[year][0][0]}~{chuseok_dates[year][-1][-1]})" for year in chuseok_stats['발생년도']]
 
@@ -291,3 +335,87 @@ fig_chuseok.update_layout(
 # Streamlit에서 Plotly 그래프 표시
 st.plotly_chart(fig_lunar)
 st.plotly_chart(fig_chuseok)
+
+# ----------------------------
+# 월드컵 기간 교통사고 추이 분석
+# ----------------------------
+
+# 가설3 텍스트에 빨간색 밑줄 추가
+st.markdown('##### [가설3] 월드컵 기간에는 유동인구가 증가하여 <span style="text-decoration: underline; text-decoration-color: red; text-underline-offset: 0.2em; text-decoration-thickness: 2px;">교통사고 발생 건수도 증가할 것이다.</span>', 
+            unsafe_allow_html=True)
+
+# 월드컵 기간 설정 (예시로 대한민국 경기 날짜 포함)
+world_cup_dates_2018 = [
+    ('06-14', '07-15')  # 2018 러시아 월드컵 전체 기간
+]
+
+world_cup_dates_2022 = [
+    ('11-20', '12-18')  # 2022 카타르 월드컵 전체 기간
+]
+
+def filter_world_cup_data(df, world_cup_dates, year):
+    world_cup_data_list = []
+    for start_date, end_date in world_cup_dates:
+        start_month, start_day = map(int, start_date.split('-'))
+        end_month, end_day = map(int, end_date.split('-'))
+        
+        filtered_data = df[
+            (df['발생년도'] == year) &
+            ((df['발생월'] == start_month) & (df['발생일'] >= start_day) | (df['발생월'] == end_month) & (df['발생일'] <= end_day))
+        ]
+        world_cup_data_list.append(filtered_data)
+    
+    return pd.concat(world_cup_data_list, ignore_index=True)
+
+# 2018년 데이터 필터링
+df_wc_2018 = filter_world_cup_data(df3_combined, world_cup_dates_2018, 2018)
+
+# 2022년 데이터 필터링
+df_wc_2022 = filter_world_cup_data(df3_combined, world_cup_dates_2022, 2022)
+
+# 연도별 사고 건수 집계
+wc_2018_stats = df_wc_2018.groupby('발생년도').sum()[['사고건수']].reset_index()
+wc_2022_stats = df_wc_2022.groupby('발생년도').sum()[['사고건수']].reset_index()
+
+# 월드컵 기간 동안의 사고 건수를 추가
+wc_2018_stats['기간'] = '2018 월드컵 기간'
+wc_2022_stats['기간'] = '2022 월드컵 기간'
+
+# 두 기간의 데이터 병합
+wc_stats_combined = pd.concat([wc_2018_stats, wc_2022_stats], ignore_index=True)
+
+# 월드컵 기간 동안의 사고 건수 시각화
+fig_wc = px.bar(wc_stats_combined, x='기간', y='사고건수', title='월드컵 기간 동안의 교통사고 건수 비교',
+                labels={'사고건수': '사고 건수', '기간': '기간'})
+
+# Streamlit에서 그래프 표시
+st.plotly_chart(fig_wc)
+
+
+# 2018년과 2022년 데이터를 그룹화하여 월별 사고 건수를 계산
+df_2018 = df3_combined[df3_combined['발생년도'] == 2018].groupby('발생월').sum()[['사고건수']].reset_index()
+df_2022 = df3_combined[df3_combined['발생년도'] == 2022].groupby('발생월').sum()[['사고건수']].reset_index()
+
+# 연도 정보 추가
+df_2018['연도'] = '2018'
+df_2022['연도'] = '2022'
+
+# 2018년과 2022년 데이터를 결합
+df_combined = pd.concat([df_2018, df_2022])
+
+# 하나의 그래프에 2018년과 2022년 데이터를 표시
+fig_combined = px.line(df_combined, x='발생월', y='사고건수', color='연도', 
+                       title='2018년과 2022년 월드컵 기간 동안의 교통사고 건수 변화',
+                       labels={'발생월': '월', '사고건수': '사고 건수', '연도': '연도'})
+
+# 2018년 월드컵 기간 표시
+fig_combined.add_scatter(x=[6, 7], y=df_2018[df_2018['발생월'].isin([6, 7])]['사고건수'], 
+                         mode='lines+markers', name='2018 월드컵 기간', line=dict(dash='dot'))
+
+# 2022년 월드컵 기간 표시
+fig_combined.add_scatter(x=[11, 12], y=df_2022[df_2022['발생월'].isin([11, 12])]['사고건수'], 
+                         mode='lines+markers', name='2022 월드컵 기간', line=dict(dash='dot'))
+
+# Streamlit에서 그래프 표시
+st.plotly_chart(fig_combined)
+
