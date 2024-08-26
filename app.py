@@ -6,6 +6,7 @@ import branca.colormap as cm
 from matplotlib import rc
 import matplotlib.pyplot as plt
 import plotly.express as px
+import json
 import plotly.graph_objects as go
 
 # 한글 폰트 설정
@@ -21,62 +22,82 @@ df = pd.read_csv('교통사고 데이터/전국교통사고다발지역표준데
 drop_list = ['데이터기준일자', '제공기관코드', '제공기관명']
 df = df.drop(columns=drop_list)
 
-# 사고건수 기준으로 데이터 내림차순 정렬
+# 사고건수 기준으로 데이터 내림차순 정렬 (표에 반영)
 df_sorted = df.sort_values(by='사고건수', ascending=False)
 
-# 사고다발 지역의 위도와 경도를 추출하고, 사고건수를 사용하여 가중치로 사용
-heat_data = []
-for index, row in df.iterrows():
-    heat_data.append([row['위도'], row['경도'], row['사고건수']])
+# '위치코드'의 앞 5자리 숫자로 그룹화하고 사고건수를 합산 (지도에 반영)
+df['위치코드_시군구'] = df['위치코드'].astype(str).str[:5]  # 위치코드에서 첫 5자리 추출
+df_grouped = df.groupby('위치코드_시군구', as_index=False)['사고건수'].sum()  # 사고건수 합산
 
-# 지도 생성
-m = folium.Map(location=[df['위도'].mean(), df['경도'].mean()], zoom_start=7)
+# 법정구역 GeoJSON 파일 불러오기
+with open('법정구역 GeoJSON 데이터_23년8월/법정구역_시군구.geojson', 'r', encoding='utf-8') as f:
+    geojson = json.load(f)
 
-# 색상 스케일 설정
-min_count = df['사고건수'].min()
-max_count = df['사고건수'].max()
-colormap = cm.LinearColormap(colors=['blue', 'lime', 'yellow', 'red'], vmin=min_count, vmax=max_count)
+# Choropleth 생성 함수 정의
+def make_choropleth(df, geojson, location_code_column, value_column, color_theme):
+    # Choropleth 생성
+    choropleth = px.choropleth(df,
+                               geojson=geojson,
+                               locations=location_code_column,
+                               featureidkey="properties.SIG_CD",
+                               color=value_column,
+                               color_continuous_scale=color_theme,
+                               labels={value_column: '사고건수'},
+                               template='simple_white'  # Use a clean template
+                              )
+    choropleth.update_geos(fitbounds="locations", visible=False)
+    choropleth.update_layout(
+        coloraxis_colorbar={
+            'title': '누적 사고건수',
+            'tickvals': [df[value_column].min(), df[value_column].max()],
+            'ticktext': [f'{df[value_column].min()}', f'{df[value_column].max()}'],  # Display numeric values
+        },
+        margin=dict(l=0, r=0, t=0, b=0),
+        height=500,
+        geo=dict(
+            bgcolor='rgba(0,0,0,0)'  # Transparent background
+        )
+    )
+    return choropleth
 
-# 히트맵 생성
-HeatMap(heat_data, radius=15, blur=25, max_zoom=1).add_to(m)
-
-# 지도에 색상바 추가
-colormap.caption = "사고건수"
-m.add_child(colormap)
-
-# 지도 HTML을 임시 파일로 저장
-map_path = 'accident_heatmap.html'
-m.save(map_path)
+# Choropleth 지도 생성
+choropleth_map = make_choropleth(df_grouped, geojson, '위치코드_시군구', '사고건수', 'Blues')  # Use the "Blues" color scale
 
 # ----------------------------
 # Streamlit 앱 구성
 # ----------------------------
 
-# 웹 폰트 설정
-
 st.title('초보운전, 언제가 가장 안전할까?')
 st.markdown('### <span style="color:#4169e1">Q1. 전국에서 교통사고가 많이 발생하는 지역은 어디일까?</span>', unsafe_allow_html=True)
 st.markdown('#### 1. 전국 교통사고 다발 지역 시각화 (2012-2021)')
 
-# 전국 사고 다발 지역 지도 표시
-with open(map_path, 'r', encoding='utf-8') as f:
-    map_html = f.read()
-st.components.v1.html(map_html, height=500)
-
-# 전국 사고건수 기준 내림차순으로 정렬된 사고지역위치명 상위 20개 표시
-st.markdown("##### ⦁ 사고 다발 지역 (전국 Top20)")
+# Choropleth 지도 표시
+st.plotly_chart(choropleth_map)
 
 # 가운데 정렬을 위한 스타일 지정
 def center_align(s):
     return ['text-align: center'] * len(s)
 
-styled_table = df_sorted[['사고지역위치명', '사고건수']].head(20).style.set_table_styles(
+# 첫 번째 표: 사고지역위치명을 기준으로 한 사고건수 Top 20
+styled_table_location = df_sorted[['사고지역위치명', '사고건수']].head(20).style.set_table_styles(
     [{'selector': 'th', 
       'props': [('background-color', '#D3D3D3'), ('font-weight', 'bold'), ('text-align', 'center')]}]
 ).apply(center_align, axis=0)
 
-# 스타일이 적용된 테이블 표시
-st.table(styled_table)
+# 전국 사고건수 기준 내림차순으로 정렬된 사고지역위치명 상위 20개 표시
+st.markdown("##### ⦁ 사고지역위치명으로 합산한 사고 다발 지역 (전국 Top20)")
+st.table(styled_table_location)
+
+# 두 번째 표: '위치코드'의 앞 5자리 숫자로 그룹화한 후 사고건수를 합산한 것의 Top 20
+df_grouped_sorted = df_grouped.sort_values(by='사고건수', ascending=False)
+styled_table_code = df_grouped_sorted.head(20).style.set_table_styles(
+    [{'selector': 'th', 
+      'props': [('background-color', '#D3D3D3'), ('font-weight', 'bold'), ('text-align', 'center')]}]
+).apply(center_align, axis=0)
+
+# '위치코드' 앞 5자리 기준으로 그룹화한 후 사고건수 상위 20개 표시
+st.markdown("##### ⦁ 시군구 기준으로 합산한 사고 다발 지역 (전국 Top20)")
+st.table(styled_table_code)
 
 # 시도별 사고 다발 지역 선택
 sido_list = df['사고지역위치명'].apply(lambda x: x.split()[0]).unique()
@@ -85,38 +106,24 @@ selected_sido = st.selectbox("시도를 선택하세요", options=sido_list)
 # 선택한 시도에 해당하는 데이터 필터링
 df_sido = df[df['사고지역위치명'].str.contains(selected_sido)]
 
-# 사고건수 기준으로 데이터 내림차순 정렬
+# 사고건수 기준으로 데이터 내림차순 정렬 (표에 반영)
 df_sorted_sido = df_sido.sort_values(by='사고건수', ascending=False)
 
-# 사고다발 지역의 위도와 경도를 추출하고, 사고건수를 사용하여 가중치로 사용
-heat_data_sido = []
-for index, row in df_sido.iterrows():
-    heat_data_sido.append([row['위도'], row['경도'], row['사고건수']])
+# '위치코드'의 앞 5자리 숫자로 그룹화하고 사고건수를 합산 (해당 시도의 지도에 반영)
+df_sido['위치코드_시군구'] = df_sido['위치코드'].astype(str).str[:5]  # 위치코드에서 첫 5자리 추출
+df_grouped_sido = df_sido.groupby('위치코드_시군구', as_index=False).agg({
+    '사고건수': 'sum',
+    '위도': 'mean',  # 중심 위치를 위한 위도 평균
+    '경도': 'mean'   # 중심 위치를 위한 경도 평균
+})
 
-# 지도 생성
-m_sido = folium.Map(location=[df_sido['위도'].mean(), df_sido['경도'].mean()], zoom_start=12)
-
-# 색상 스케일 설정
-min_count_sido = df_sido['사고건수'].min()
-max_count_sido = df_sido['사고건수'].max()
-colormap_sido = cm.LinearColormap(colors=['blue', 'lime', 'yellow', 'red'], vmin=min_count_sido, vmax=max_count_sido)
-
-# 히트맵 생성
-HeatMap(heat_data_sido, radius=15, blur=25, max_zoom=1).add_to(m_sido)
-
-# 지도에 색상바 추가
-colormap_sido.caption = "사고건수"
-m_sido.add_child(colormap_sido)
-
-# 지도 HTML을 임시 파일로 저장
-map_sido_path = 'sido_accident_heatmap.html'
-m_sido.save(map_sido_path)
+# 선택된 시도의 Choropleth 지도 생성
+choropleth_map_sido = make_choropleth(df_grouped_sido, geojson, '위치코드_시군구', '사고건수', 'Reds')  # Use the "Reds" color scale
 
 # 선택된 시도에 대한 지도 표시
 st.markdown(f'#### 2. {selected_sido}의 교통사고 다발 지역 시각화 (2012-2021)')
-with open(map_sido_path, 'r', encoding='utf-8') as f:
-    map_sido_html = f.read()
-st.components.v1.html(map_sido_html, height=500)
+st.plotly_chart(choropleth_map_sido)
+
 
 # 선택된 시도의 사고건수 기준 내림차순으로 정렬된 사고지역위치명 상위 10개 표시
 st.markdown(f"##### ⦁ {selected_sido} 내 사고 다발 지역 (Top10)")
@@ -418,4 +425,11 @@ fig_combined.add_scatter(x=[11, 12], y=df_2022[df_2022['발생월'].isin([11, 12
 
 # Streamlit에서 그래프 표시
 st.plotly_chart(fig_combined)
+
+# 사고 추이 분석 - 미세먼지
+st.markdown('### <span style="color:#4169e1">Q4. 미세먼지에 따른 교통사고건수 변화는?</span>', unsafe_allow_html=True)
+
+# 사고 추이 분석 - 주가등락률
+st.markdown('### <span style="color:#4169e1">Q5. 주가 등락률에 따른 교통사고건수 변화는?</span>', unsafe_allow_html=True)
+
 
